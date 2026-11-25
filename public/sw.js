@@ -1,8 +1,8 @@
+// Cloudflare 307-redirects /index.html to /, so only "./" is precached.
 // Bump CACHE whenever any file below changes so installed copies pick up the update.
-const CACHE = "simple-to-do-v1";
+const CACHE = "simple-to-do-v2";
 const ASSETS = [
   "./",
-  "index.html",
   "styles.css",
   "app.js",
   "store.js",
@@ -37,7 +37,7 @@ self.addEventListener("fetch", (event) => {
           if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); }
           return res;
         })
-        .catch(() => hit);
+        .catch(() => hit || (req.mode === "navigate" ? caches.match("./") : undefined));
       return hit || net;
     })
   );
