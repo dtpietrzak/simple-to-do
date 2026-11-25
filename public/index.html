@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>simple-to-do</title>
+  <meta name="description" content="A tiny offline to-do list with Later, Month and Week lists. Everything stays on your device." />
+  <meta name="theme-color" content="#2f7d5b" />
+  <meta name="color-scheme" content="light dark" />
+  <link rel="canonical" href="https://simple-to-do.davidp.dev/" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+  <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="simple-to-do" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="top">
+    <h1 id="title">Later</h1>
+    <button id="add" class="add" type="button" aria-label="Add item">
+      <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/></svg>
+    </button>
+  </header>
+
+  <main id="list" class="list" aria-live="polite"></main>
+
+  <nav class="tabs" aria-label="Pages">
+    <a href="#later" data-page="later"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10" /></svg><span>Later</span></a>
+    <a href="#month" data-page="month"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M8 3v4M16 3v4"/></svg><span>Month</span></a>
+    <a href="#week" data-page="week"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M8 14h8M8 17h5M8 3v4M16 3v4"/></svg><span>Week</span></a>
+    <a href="#history" data-page="history"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 3-6.2M4 4v4h4M12 8v4l3 2"/></svg><span>History</span></a>
+  </nav>
+
+  <dialog id="addDialog" class="modal">
+    <form id="addForm" method="dialog" autocomplete="off">
+      <input id="addInput" type="text" placeholder="What do you want to do?" enterkeyhint="done" maxlength="500" autocapitalize="sentences" aria-label="New item" />
+      <div class="row">
+        <button type="button" id="addCancel" class="ghost">Cancel</button>
+        <button type="submit" class="primary">Add</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="menuDialog" class="modal sheet">
+    <div id="menuBody"></div>
+  </dialog>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

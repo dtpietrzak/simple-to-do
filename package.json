@@ -1,0 +1,15 @@
+{
+  "name": "simple-to-do",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "dev": "python3 -m http.server 5181 --directory public",
+    "test": "node --test test/",
+    "deploy": "cf deploy ./public"
+  },
+  "devDependencies": {
+    "cf": "^1.0.0-rc.1",
+    "fake-indexeddb": "^6.0.0"
+  }
+}
