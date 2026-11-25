@@ -10,6 +10,8 @@ A tiny installable to-do PWA built for very quick additions. Everything is store
 - **+** (top right) opens a modal; type and press **Add** (or Enter). The item lands on the current page. On History, **+** adds to Later.
 - On Later, Month and Week, **swipe or drag** a row sideways to move it: right goes Later → Month → Week, left goes back. The target list shows as a colored hint while you drag. Works with touch and mouse.
 - Fallback: **long-press** (or right-click) a row, or tap its **⋯**, to pick any list directly (or delete it).
+- When adding, you can optionally type or pick a **category**. The dropdown lists every category already used on a task (including History). Tasks with no category are grouped under **Misc**.
+- Each page groups items into accordions by category (named categories A–Z, Misc last), with a count in the header. Open/closed state is saved in `localStorage` under `simple-to-do:accordions`, and defaults to open. The ⋯ menu can also change an item's category.
 - **Check** an item to send it to History. Only the completion date and the list it came from are kept. **Uncheck** it in History and it returns to that list.
 
 Because nothing leaves your device, clearing site data erases your list.
@@ -19,8 +21,9 @@ Because nothing leaves your device, clearing site data erases your list.
 One IndexedDB database (`simple-to-do`), one object store (`items`):
 
 ```js
-{ id, text, list: "later" | "month" | "week" | "history", order,
-  completedAt?, from? }   // completedAt + from only while in History
+{ id, text, list: "later" | "month" | "week" | "history", order, category?,
+  completedAt?, from? }   // category omitted when unset (shown as Misc)
+                          // completedAt + from only while in History
 ```
 
 List logic lives in `public/store.js` (no DOM) and is unit-tested in Node.

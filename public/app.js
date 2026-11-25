@@ -1,10 +1,11 @@
-import { LISTS, PAGES, LABELS, neighbor, openDb, createStore } from "./store.js";
+import { LISTS, PAGES, LABELS, MISC, neighbor, normalizeCategory, groupByCategory, openDb, createStore } from "./store.js";
 
 const $ = (id) => document.getElementById(id);
 const listEl = $("list"), titleEl = $("title");
-const addDialog = $("addDialog"), addInput = $("addInput"), addForm = $("addForm");
+const addDialog = $("addDialog"), addInput = $("addInput"), catInput = $("catInput"), addForm = $("addForm");
 const menuDialog = $("menuDialog"), menuBody = $("menuBody");
 const COLORS = { later: "var(--later)", month: "var(--month)", week: "var(--week)" };
+const ACCORDION_KEY = "simple-to-do:accordions";
 
 let store;
 let page = "later";
@@ -13,6 +14,32 @@ const currentPage = () => {
   const h = location.hash.slice(1);
   return PAGES.includes(h) ? h : "later";
 };
+
+function accordionOpen(pg, category) {
+  try {
+    const map = JSON.parse(localStorage.getItem(ACCORDION_KEY) || "{}");
+    return map[`${pg}:${category}`] !== false;
+  } catch {
+    return true;
+  }
+}
+
+function setAccordionOpen(pg, category, open) {
+  try {
+    const map = JSON.parse(localStorage.getItem(ACCORDION_KEY) || "{}");
+    map[`${pg}:${category}`] = open;
+    localStorage.setItem(ACCORDION_KEY, JSON.stringify(map));
+  } catch {}
+}
+
+async function fillCatList(datalist) {
+  datalist.replaceChildren();
+  for (const c of await store.categories()) {
+    const o = document.createElement("option");
+    o.value = c;
+    datalist.append(o);
+  }
+}
 
 // ---------- rendering ----------
 const fmt = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -65,6 +92,18 @@ function renderItem(it) {
   return wrap;
 }
 
+function renderGroup(name, items) {
+  const details = el("details", "cat");
+  details.dataset.category = name;
+  if (accordionOpen(page, name)) details.open = true;
+  details.addEventListener("toggle", () => setAccordionOpen(page, name, details.open));
+  const summary = el("summary");
+  summary.append(document.createTextNode(name), el("span", "cat-count", String(items.length)));
+  details.append(summary);
+  items.forEach((it) => details.append(renderItem(it)));
+  return details;
+}
+
 async function render() {
   page = currentPage();
   titleEl.textContent = LABELS[page];
@@ -81,7 +120,7 @@ async function render() {
     return;
   }
   const frag = document.createDocumentFragment();
-  items.forEach((it) => frag.append(renderItem(it)));
+  for (const g of groupByCategory(items)) frag.append(renderGroup(g.name, g.items));
   listEl.append(frag);
 }
 
@@ -129,14 +168,50 @@ function openMenu(it) {
       menuBody.append(b);
     }
   }
+  const catBtn = el("button", "opt", "Change category…");
+  catBtn.type = "button";
+  catBtn.addEventListener("click", () => openCategoryEditor(it));
   const del = el("button", "opt danger", "Delete");
   del.type = "button";
   del.addEventListener("click", async () => { menuDialog.close(); await store.remove(it.id); render(); });
   const cancel = el("button", "opt", "Cancel");
   cancel.type = "button";
   cancel.addEventListener("click", () => menuDialog.close());
-  menuBody.append(del, cancel);
+  menuBody.append(catBtn, del, cancel);
   menuDialog.showModal();
+}
+
+async function openCategoryEditor(it) {
+  menuBody.replaceChildren(el("h2", null, it.text));
+  const input = el("input");
+  input.id = "editCatInput";
+  input.type = "text";
+  input.setAttribute("list", "editCatList");
+  input.placeholder = "Misc";
+  input.maxLength = 80;
+  input.autocomplete = "off";
+  input.setAttribute("aria-label", "Category");
+  input.value = normalizeCategory(it.category);
+  const dl = el("datalist");
+  dl.id = "editCatList";
+  await fillCatList(dl);
+  const save = el("button", "primary", "Save");
+  save.type = "button";
+  const commit = async () => {
+    menuDialog.close();
+    await store.setCategory(it.id, input.value);
+    render();
+  };
+  save.addEventListener("click", commit);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); commit(); } });
+  const cancel = el("button", "ghost", "Cancel");
+  cancel.type = "button";
+  cancel.addEventListener("click", () => menuDialog.close());
+  const row = el("div", "row");
+  row.append(cancel, save);
+  menuBody.append(input, dl, row);
+  input.focus();
+  input.select();
 }
 
 // ---------- swipe / drag (touch + mouse via pointer events) ----------
@@ -200,10 +275,12 @@ function attachSwipe(wrap, card, it) {
 }
 
 // ---------- add modal ----------
-function openAdd() {
+async function openAdd() {
   addInput.value = "";
+  catInput.value = "";
   addDialog.showModal();
   addInput.focus();
+  fillCatList($("catList"));
 }
 $("add").addEventListener("click", openAdd);
 $("addCancel").addEventListener("click", () => addDialog.close());
@@ -214,7 +291,7 @@ addForm.addEventListener("submit", async (e) => {
   const text = addInput.value.trim();
   if (!text) { addInput.focus(); return; }
   const list = page === "history" ? "later" : page;
-  await store.add(text, list);
+  await store.add(text, list, catInput.value);
   addDialog.close();
   if (page === "history") toast("Added to Later");
   render();

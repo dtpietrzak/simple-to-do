@@ -37,7 +37,9 @@
 
   <dialog id="addDialog" class="modal">
     <form id="addForm" method="dialog" autocomplete="off">
-      <input id="addInput" type="text" placeholder="What do you want to do?" enterkeyhint="done" maxlength="500" autocapitalize="sentences" aria-label="New item" />
+      <input id="addInput" type="text" placeholder="What do you want to do?" enterkeyhint="next" maxlength="500" autocapitalize="sentences" aria-label="New item" />
+      <input id="catInput" type="text" list="catList" placeholder="Category (optional)" enterkeyhint="done" maxlength="80" autocomplete="off" autocapitalize="sentences" aria-label="Category" />
+      <datalist id="catList"></datalist>
       <div class="row">
         <button type="button" id="addCancel" class="ghost">Cancel</button>
         <button type="submit" class="primary">Add</button>

@@ -2,12 +2,55 @@
 export const LISTS = ["later", "month", "week"];
 export const PAGES = [...LISTS, "history"];
 export const LABELS = { later: "Later", month: "Month", week: "Week", history: "History" };
+export const MISC = "Misc";
 
 /** Neighbouring list in Later → Month → Week order, or null at the ends. dir: +1 | -1 */
 export function neighbor(list, dir) {
   const i = LISTS.indexOf(list);
   if (i < 0) return null;
   return LISTS[i + dir] ?? null;
+}
+
+/** Trim; empty or "misc" (any case) means no category. */
+export function normalizeCategory(category) {
+  const c = String(category ?? "").trim();
+  return c && c.toLowerCase() !== "misc" ? c : "";
+}
+
+export function categoryOf(it) {
+  return normalizeCategory(it?.category) || MISC;
+}
+
+/** Distinct named categories (case-insensitive, first-seen spelling), A–Z. */
+export function categoriesOf(items) {
+  const seen = new Map();
+  for (const it of items) {
+    const c = normalizeCategory(it?.category);
+    if (!c) continue;
+    const k = c.toLowerCase();
+    if (!seen.has(k)) seen.set(k, c);
+  }
+  return [...seen.values()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+}
+
+/** Group items by category, keeping input order within each group. Named A–Z, Misc last. */
+export function groupByCategory(items) {
+  const groups = new Map();
+  const labels = new Map();
+  for (const it of items) {
+    const raw = normalizeCategory(it?.category);
+    const key = raw ? raw.toLowerCase() : "\0misc";
+    if (!groups.has(key)) {
+      groups.set(key, []);
+      labels.set(key, raw || MISC);
+    }
+    groups.get(key).push(it);
+  }
+  const keys = [...groups.keys()]
+    .filter((k) => k !== "\0misc")
+    .sort((a, b) => labels.get(a).localeCompare(labels.get(b), undefined, { sensitivity: "base" }));
+  if (groups.has("\0misc")) keys.push("\0misc");
+  return keys.map((k) => ({ name: labels.get(k), items: groups.get(k) }));
 }
 
 const STORE = "items";
@@ -40,8 +83,16 @@ const wrap = (req) =>
 const newId = () =>
   globalThis.crypto?.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
 
-// Item shape: { id, text, list: "later"|"month"|"week"|"history", order, completedAt?, from? }
-// `order` sorts newest-first inside a list. History is sorted by completedAt.
+const withCategory = (item, category) => {
+  const cat = normalizeCategory(category);
+  if (cat) item.category = cat;
+  else delete item.category;
+  return item;
+};
+
+// Item shape: { id, text, list: "later"|"month"|"week"|"history", order, category?, completedAt?, from? }
+// `category` is omitted when unset (shown as Misc). `order` sorts newest-first inside a list.
+// History is sorted by completedAt. category is kept through moves, check and uncheck.
 export function createStore(db, now = () => Date.now()) {
   let lastOrder = 0;
   const nextOrder = () => (lastOrder = Math.max(now(), lastOrder + 1));
@@ -69,10 +120,13 @@ export function createStore(db, now = () => Date.now()) {
         ? items.sort((a, b) => b.completedAt - a.completedAt)
         : items.sort((a, b) => b.order - a.order);
     },
-    async add(text, list) {
+    async categories() {
+      return categoriesOf(await this.all());
+    },
+    async add(text, list, category) {
       text = String(text ?? "").trim();
       if (!text || !LISTS.includes(list)) return null;
-      const item = { id: newId(), text, list, order: nextOrder() };
+      const item = withCategory({ id: newId(), text, list, order: nextOrder() }, category);
       const tx = db.transaction(STORE, "readwrite");
       tx.objectStore(STORE).add(item);
       await done(tx);
@@ -83,13 +137,20 @@ export function createStore(db, now = () => Date.now()) {
       if (!LISTS.includes(list)) return Promise.resolve();
       return mutate(id, (it) => (it.list === "history" || it.list === list ? it : { ...it, list, order: nextOrder() }));
     },
-    /** Check off: goes to History remembering only when it was done and where it came from. */
-    check(id) {
-      return mutate(id, (it) =>
-        it.list === "history" ? it : { id: it.id, text: it.text, order: it.order, list: "history", from: it.list, completedAt: now() }
-      );
+    setCategory(id, category) {
+      return mutate(id, (it) => withCategory({ ...it }, category));
     },
-    /** Uncheck in History: returns to the list it came from. */
+    /** Check off: goes to History remembering when it was done, where it came from, and its category. */
+    check(id) {
+      return mutate(id, (it) => {
+        if (it.list === "history") return it;
+        return withCategory(
+          { id: it.id, text: it.text, order: it.order, list: "history", from: it.list, completedAt: now() },
+          it.category
+        );
+      });
+    },
+    /** Uncheck in History: returns to the list it came from, category intact. */
     uncheck(id) {
       return mutate(id, (it) => {
         if (it.list !== "history") return it;

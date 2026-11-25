@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { openDb, createStore, neighbor } from "../public/store.js";
+import { openDb, createStore, neighbor, MISC, normalizeCategory, categoryOf, categoriesOf, groupByCategory } from "../public/store.js";
 
 let n = 0;
 const fresh = async () => {
@@ -71,4 +71,73 @@ test("data persists across reopen", async () => {
   await s.add("keep me", "month");
   s = createStore(await openDb(indexedDB, name));
   assert.equal((await s.list("month"))[0].text, "keep me");
+});
+
+
+test("normalizeCategory trims; empty and Misc are no category", () => {
+  assert.equal(normalizeCategory("  Work  "), "Work");
+  assert.equal(normalizeCategory(""), "");
+  assert.equal(normalizeCategory("   "), "");
+  assert.equal(normalizeCategory(null), "");
+  assert.equal(normalizeCategory("Misc"), "");
+  assert.equal(normalizeCategory("misc"), "");
+  assert.equal(categoryOf({}), MISC);
+  assert.equal(categoryOf({ category: "  " }), MISC);
+  assert.equal(categoryOf({ category: "Home" }), "Home");
+});
+
+test("add stores optional category; whitespace/Misc omitted", async () => {
+  const s = await fresh();
+  const a = await s.add("milk", "later", "  Groceries  ");
+  const b = await s.add("idle", "later");
+  const c = await s.add("other", "later", "Misc");
+  assert.equal(a.category, "Groceries");
+  assert.equal(b.category, undefined);
+  assert.equal(c.category, undefined);
+  assert.equal((await s.list("later")).find((i) => i.text === "milk").category, "Groceries");
+});
+
+test("category survives move, check and uncheck", async () => {
+  const s = await fresh();
+  const a = await s.add("oil change", "later", "Car");
+  await s.move(a.id, "week");
+  assert.equal((await s.list("week"))[0].category, "Car");
+  await s.check(a.id);
+  const [h] = await s.list("history");
+  assert.equal(h.category, "Car");
+  assert.equal(h.from, "week");
+  await s.uncheck(a.id);
+  const [back] = await s.list("week");
+  assert.equal(back.category, "Car");
+  assert.equal(back.completedAt, undefined);
+  assert.equal(back.from, undefined);
+});
+
+test("setCategory updates or clears; categories() is unique across lists + history", async () => {
+  const s = await fresh();
+  const a = await s.add("x", "later", "Work");
+  await s.add("y", "month", "Home");
+  const z = await s.add("z", "week", "work"); // same as Work, different case
+  await s.check(z.id);
+  assert.deepEqual(await s.categories(), ["Home", "Work"]);
+  await s.setCategory(a.id, "  Errands  ");
+  assert.equal((await s.list("later"))[0].category, "Errands");
+  await s.setCategory(a.id, "  ");
+  assert.equal((await s.list("later"))[0].category, undefined);
+});
+
+test("groupByCategory: named A–Z, Misc last, input order kept, case-insensitive", () => {
+  const items = [
+    { text: "n1", category: "Work" },
+    { text: "m1" },
+    { text: "n2", category: "work" },
+    { text: "h1", category: "Home" },
+    { text: "m2", category: "  " },
+  ];
+  const groups = groupByCategory(items);
+  assert.deepEqual(groups.map((g) => g.name), ["Home", "Work", "Misc"]);
+  assert.deepEqual(groups[1].items.map((i) => i.text), ["n1", "n2"]);
+  assert.deepEqual(groups[2].items.map((i) => i.text), ["m1", "m2"]);
+  assert.deepEqual(categoriesOf(items), ["Home", "Work"]);
+  assert.deepEqual(groupByCategory([{ text: "only" }]).map((g) => g.name), ["Misc"]);
 });
